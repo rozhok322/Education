@@ -7,7 +7,7 @@ import (
 
 func main() {
 
-	Handle := hand.NewPerson()
+	Handle := hand.NewHandle()
 	router := gin.Default()
 	router.GET("/profile", Handle.GetProfileHandler)
 	router.POST("/profile", Handle.CreateProfileHandler)

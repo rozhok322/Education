@@ -8,20 +8,22 @@ import (
 )
 
 type Person struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Age      int    `json:"age"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+type Handle struct {
 	Profiles map[string]Person
 }
 
-func NewPerson() *Person {
-	return &Person{
+func NewHandle() *Handle {
+	return &Handle{
 		Profiles: make(map[string]Person),
 	}
 
 }
 
-func (p *Person) GetProfileHandler(c *gin.Context) {
+func (p *Handle) GetProfileHandler(c *gin.Context) {
 	id := c.Query("id")
 
 	if id == "" {
@@ -43,7 +45,7 @@ func (p *Person) GetProfileHandler(c *gin.Context) {
 	})
 
 }
-func (p *Person) CreateProfileHandler(c *gin.Context) {
+func (p *Handle) CreateProfileHandler(c *gin.Context) {
 	var person Person
 
 	if err := c.BindJSON(&person); err != nil {
@@ -67,7 +69,7 @@ func (p *Person) CreateProfileHandler(c *gin.Context) {
 		"age":     person.Age,
 	})
 }
-func (p *Person) UpdateProfileHandler(c *gin.Context) {
+func (p *Handle) UpdateProfileHandler(c *gin.Context) {
 	var person Person
 
 	if err := c.BindJSON(&person); err != nil {
@@ -94,7 +96,7 @@ func (p *Person) UpdateProfileHandler(c *gin.Context) {
 	})
 
 }
-func (p *Person) DeleteProfileHandler(c *gin.Context) {
+func (p *Handle) DeleteProfileHandler(c *gin.Context) {
 	id := c.Query("id")
 
 	if id == "" {
