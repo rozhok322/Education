@@ -1,10 +1,13 @@
 package hand
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 )
 
 type Person struct {
@@ -13,14 +16,14 @@ type Person struct {
 	Age  int    `json:"age"`
 }
 type Handle struct {
-	Profiles map[string]Person
+	conn *pgx.Conn
 }
 
-func NewHandle() *Handle {
-	return &Handle{
-		Profiles: make(map[string]Person),
-	}
+func NewHandle(conn *pgx.Conn) *Handle {
 
+	return &Handle{
+		conn: conn,
+	}
 }
 
 func (p *Handle) GetProfileHandler(c *gin.Context) {
@@ -30,10 +33,16 @@ func (p *Handle) GetProfileHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing id"})
 		return
 	}
+	var person Person
 
-	person, exists := p.Profiles[id]
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+	err := p.conn.QueryRow(context.Background(), "select id,name,age from profiles where id=$1", id).Scan(&person.ID, &person.Name, &person.Age)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
 		return
 	}
 
@@ -60,7 +69,12 @@ func (p *Handle) CreateProfileHandler(c *gin.Context) {
 
 	person.ID = uuid.New().String()
 
-	p.Profiles[person.ID] = person
+	_, err := p.conn.Exec(context.Background(), "insert into profiles (id,name,age) values($1,$2,$3)", person.ID, person.Name, person.Age)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create profile: %v", err)})
+		return
+	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Profile created",
@@ -81,12 +95,16 @@ func (p *Handle) UpdateProfileHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing id"})
 		return
 	}
-	_, exists := p.Profiles[person.ID]
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+	err := p.conn.QueryRow(context.Background(), "UPDATE profiles SET name = $1, age = $2 WHERE id = $3 RETURNING id, name, age", person.Name, person.Age, person.ID).Scan(&person.ID, &person.Name, &person.Age)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Database error: %v", err)})
+		}
 		return
 	}
-	p.Profiles[person.ID] = person
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Profile updated",
@@ -103,12 +121,17 @@ func (p *Handle) DeleteProfileHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing id"})
 		return
 	}
-	_, exists := p.Profiles[id]
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+	var deleteID string
+	err := p.conn.QueryRow(context.Background(), "DELETE FROM profiles WHERE id = $1 RETURNING id", id).Scan(&deleteID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Database error: %v", err)})
+		}
 		return
 	}
-	delete(p.Profiles, id)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Profile deleted", "id": id})
 }
